@@ -9,198 +9,156 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import confusion_matrix, classification_report, roc_curve, auc
 import streamlit as st
 
-# Definimos criterion antes de usarlo
+# Configurar criterio inicial
 criterion = "gini"
 
-
 # Cargar el conjunto de datos
-df = pd.read_csv("D:/Usuarios/jmazob01/Desktop/3eval/atletas_1.csv")
-
+df = pd.read_csv("D:/Usuarios/jmazob01/Desktop/3eval/clasificacion/atletas_1.csv")
 
 # Eliminar valores faltantes
 df.dropna(inplace=True)
 
-
-# Convertir variables categóricas a números
+# Convertir variables categóricas a numéricas
 label_encoder = LabelEncoder()
 for column in df.select_dtypes(include=['object']).columns:
     df[column] = label_encoder.fit_transform(df[column])
 
-
-# Identificar valores atípicos utilizando el método del Rango Intercuartílico (IQR)
+# Identificar valores atípicos (opcional: podrías eliminarlos)
 Q1 = df.quantile(0.25)
 Q3 = df.quantile(0.75)
 IQR = Q3 - Q1
 outliers = (df < (Q1 - 1.5 * IQR)) | (df > (Q3 + 1.5 * IQR))
 
-
-# Función para visualizar valores atípicos con diagramas de caja (boxplots)
-def plot_outliers():
-    plt.figure(figsize=(10, 5))
-    sns.boxplot(data=df)
-    plt.xticks(rotation=90)
-    plt.title("Distribución de Datos y Valores Atípicos")
-    plt.show()
-
-
-# Mostrar los valores atípicos
-plot_outliers()
-
-
-# Visualizar distribuciones de datos con histogramas
-df.hist(figsize=(10, 8))
-plt.show()
-
-
-# Mostrar correlación entre variables
-plt.figure(figsize=(10, 6))
-sns.heatmap(df.corr(), annot=True, cmap="coolwarm")
-plt.title("Matriz de Correlación")
-plt.show()
-
-
-# Dividir los datos en conjuntos de entrenamiento (80%) y prueba (20%)
+# Separar características y etiquetas
 X = df.drop("Clasificación", axis=1)
 y = df["Clasificación"]
+
+# Dividir datos en entrenamiento y prueba
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-
-# Crear y entrenar modelos
+# Entrenar modelos
 log_reg = LogisticRegression()
 log_reg.fit(X_train, y_train)
-
 
 dec_tree = DecisionTreeClassifier(criterion=criterion)
 dec_tree.fit(X_train, y_train)
 
-
-# Hacer predicciones
+# Predicciones
 y_pred_log = log_reg.predict(X_test)
 y_pred_tree = dec_tree.predict(X_test)
 
-
-# Evaluar modelos
-print("Matriz de Confusión - Regresión Logística:")
-print(confusion_matrix(y_test, y_pred_log))
-print("Reporte de Clasificación:")
-print(classification_report(y_test, y_pred_log))
-
-
-print("Matriz de Confusión - Árbol de Decisión:")
-print(confusion_matrix(y_test, y_pred_tree))
-print("Reporte de Clasificación:")
-print(classification_report(y_test, y_pred_tree))
-
-
-# Curva ROC
-# Calcular la Tasa de Falsos Positivos y la Tasa de Verdaderos Positivos para ambos modelos
+# Curvas ROC
 fpr_log, tpr_log, _ = roc_curve(y_test, log_reg.predict_proba(X_test)[:, 1])
 fpr_tree, tpr_tree, _ = roc_curve(y_test, dec_tree.predict_proba(X_test)[:, 1])
 
+# Funciones de gráficos dinámicos
+def plot_outliers():
+    fig, ax = plt.subplots(figsize=(10, 5))
+    sns.boxplot(data=df, ax=ax)
+    ax.set_title("Distribución de Datos y Valores Atípicos")
+    plt.xticks(rotation=90)
+    st.pyplot(fig)
 
-# Graficar la curva ROC
-plt.figure(figsize=(8, 6))
-plt.plot(fpr_log, tpr_log, label=f"Regresión Logística (AUC = {auc(fpr_log, tpr_log):.2f})")
-plt.plot(fpr_tree, tpr_tree, label=f"Árbol de Decisión (AUC = {auc(fpr_tree, tpr_tree):.2f})")
-plt.plot([0, 1], [0, 1], linestyle="--")
-plt.xlabel("Tasa de Falsos Positivos")
-plt.ylabel("Tasa de Verdaderos Positivos")
-plt.legend()
-plt.title("Curva ROC")
-plt.show()
+def plot_histogram():
+    numeric_cols = df.select_dtypes(include=[np.number]).columns
+    n = len(numeric_cols)
+    cols = 3
+    rows = (n + cols - 1) // cols
 
-# Aplicación web con Streamlit
+    fig, axes = plt.subplots(rows, cols, figsize=(15, 5 * rows))
+    axes = axes.flatten()
+
+    for i, col in enumerate(numeric_cols):
+        axes[i].hist(df[col], bins=20, color='lightblue', edgecolor='black')
+        axes[i].set_title(f'Histograma de {col}')
+
+    for j in range(i+1, len(axes)):
+        fig.delaxes(axes[j])  # Eliminar subgráficos vacíos
+
+    plt.tight_layout()
+    st.pyplot(fig)
+
+
+
+def plot_correlation():
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.heatmap(df.corr(), annot=True, cmap="coolwarm", ax=ax)
+    ax.set_title("Matriz de Correlación")
+    st.pyplot(fig)
+
+def plot_roc_curve():
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.plot(fpr_log, tpr_log, label=f"Regresión Logística (AUC = {auc(fpr_log, tpr_log):.2f})")
+    ax.plot(fpr_tree, tpr_tree, label=f"Árbol de Decisión (AUC = {auc(fpr_tree, tpr_tree):.2f})")
+    ax.plot([0, 1], [0, 1], linestyle="--")
+    ax.set_xlabel("Tasa de Falsos Positivos")
+    ax.set_ylabel("Tasa de Verdaderos Positivos")
+    ax.legend()
+    ax.set_title("Curva ROC")
+    st.pyplot(fig)
+
+# Interfaz Streamlit
 st.title("Análisis de Datos y Modelado")
 
-
-# Crear un menú lateral
+# Menú lateral
 menu = ["Preprocesamiento de Datos", "Métricas del Modelo", "Realizar Predicciones"]
 choice = st.sidebar.selectbox("Selecciona una opción", menu)
 
-
-# Ahora esto actualizará el valor de criterion que ya tiene un valor predeterminado
+# Selector de criterio para árbol (aunque se entrena antes del cambio)
 criterion = st.sidebar.selectbox("Criterio del árbol", ["entropy", "gini"])
 
-
-# Hago un sidebar donde colocar las variables
-# Crear sliders para las variables de entrada
+# Variables de entrada
 st.sidebar.subheader("Variables de entrada")
-
-
-# Obtener nombres de columnas excluyendo la variable objetivo
 feature_columns = X.columns.tolist()
-
-
-# Diccionario para almacenar valores de los sliders
 input_values = {}
 
-
-# Crear un slider para cada característica
 for feature in feature_columns:
-    # Obtener valores mínimo y máximo de la característica
     min_val = float(X[feature].min())
     max_val = float(X[feature].max())
-   
-    # Crear slider con rango apropiado
     input_values[feature] = st.sidebar.slider(
         f"{feature}",
         min_value=min_val,
         max_value=max_val,
-        value=float(X[feature].mean()),  # Valor predeterminado es la media
-        step=(max_val - min_val) / 100  # Crear 100 pasos entre min y max
+        value=float(X[feature].mean()),
+        step=(max_val - min_val) / 100
     )
 
-
-# Crear un DataFrame con los valores de entrada
 input_values_df = pd.DataFrame([input_values])
 
-
-# Mostrar contenido según la selección del menú
+# Contenido según menú
 if choice == "Preprocesamiento de Datos":
-    st.write("Datos después del preprocesamiento:")
+    st.subheader("Datos después del preprocesamiento")
     st.dataframe(df.head())
-    st.image('D:/Usuarios/jmazob01/Desktop/3eval/Figure_1.png')
-    st.image('D:/Usuarios/jmazob01/Desktop/3eval/Figure_2.png')
-    
+    plot_outliers()
+    plot_histogram()
+    plot_correlation()
+
 elif choice == "Métricas del Modelo":
-    st.write("Métricas de Evaluación del Modelo")
-   
     st.subheader("Resultados de Regresión Logística")
     st.text("Matriz de Confusión:")
     st.text(confusion_matrix(y_test, y_pred_log))
     st.text("Reporte de Clasificación:")
     st.text(classification_report(y_test, y_pred_log))
-   
+
     st.subheader("Resultados del Árbol de Decisión")
     st.text("Matriz de Confusión:")
     st.text(confusion_matrix(y_test, y_pred_tree))
     st.text("Reporte de Clasificación:")
     st.text(classification_report(y_test, y_pred_tree))
-    st.image('D:/Usuarios/jmazob01/Desktop/3eval/Figure_3.png')
-    st.image('D:/Usuarios/jmazob01/Desktop/3eval/Figure_4.png')
-    
 
-
+    plot_roc_curve()
 
 elif choice == "Realizar Predicciones":
-    st.write("Predicciones con los valores seleccionados:")
+    st.subheader("Predicciones con los valores seleccionados")
     st.dataframe(input_values_df)
-   
-    # Realizar predicciones
+
     log_pred = log_reg.predict(input_values_df)[0]
     tree_pred = dec_tree.predict(input_values_df)[0]
-   
+
     st.subheader("Predicción con Regresión Logística")
     st.write(f"Resultado: {log_pred}")
-    if log_pred == 0:
-        st.write("Fondista")
-    else:
-        st.write("Velocista")
-   
+    st.write("Fondista" if log_pred == 0 else "Velocista")
+
     st.subheader("Predicción con Árbol de Decisión")
     st.write(f"Resultado: {tree_pred}")
-    if tree_pred == 0:
-        st.write("Fondista")
-    else:
-        st.write("Velocista")
-   
+    st.write("Fondista" if tree_pred == 0 else "Velocista")
